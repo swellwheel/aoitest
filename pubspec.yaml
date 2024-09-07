@@ -30,6 +30,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  google_maps_flutter: ^2.5.0
+  latlong2: ^0.9.0
+  geocoding: ^2.1.1
+  http: ^1.1.0
+  csv: ^5.1.1
+  permission_handler: ^11.0.1
+  geolocator: ^10.1.0
+  file_picker: ^6.0.0
+  camera: ^0.10.0
+  gbk_codec: ^0.4.0
+  charset_converter: ^2.1.1
+  intl: ^0.17.0
 
 
   # The following adds the Cupertino Icons font to your application.
@@ -59,9 +71,12 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/first.png
+    - assets/Button_first.png
+    - assets/second1.png
+    - assets/second2.png
+    - assets/second3.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
