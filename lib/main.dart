@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import "choose_page.dart";
 import "map.dart";
 import "summit.dart";
+import "analysis.dart";
 import "global.dart" as global;
 
 void main() {
@@ -18,6 +19,7 @@ class MyApp extends StatelessWidget {
         '/choose': (context) => ChoosePage(), // 第一個頁面
         '/map':(context) => MapPage(),
         "/summit" : (context) => SummitPage(),
+        "/analysis" : (context) => AnalysisPage(),
       },);
   }
 }

@@ -118,15 +118,72 @@ class _DetailPageState extends State<DetailPage> {
   int remainingQuantity = 0;
   String selectedQuantity = '領取 1份';
   String uploadTime = '';
+  bool hasClaimed = false;
+  bool isInterested = false; // 新增興趣狀態
+  bool? userRating; // 用於儲存按讚或不喜歡的狀態
+
   @override
   void initState() {
     super.initState();
-    int interestedCount = widget.data.numInterests;
-    int remainingQuantity = widget.data.foodNum - widget.data.takedQuantity;
-    String selectedQuantity = '領取 1份';
-    String uploadTime = widget.data.postTime;
+    interestedCount = widget.data.numInterests;
+    remainingQuantity = widget.data.foodNum - widget.data.takedQuantity;
+    selectedQuantity = '領取 1份';
+    uploadTime = widget.data.postTime;
+    _checkClaimStatus();
+    _checkInterestStatus();
+    _checkLikeDislikeStatus();
+  }
+    // 檢查是否已經有興趣
+  Future<void> _checkInterestStatus() async {
+    try {
+      final interestResponse = await http.get(
+        Uri.parse('http://192.168.112.134:8000/api/interest/${userid_detail}/${widget.data.postId}/'),
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+      );
+
+      if (interestResponse.statusCode == 200) {
+        final interestResponseBody = jsonDecode(interestResponse.body);
+
+        setState(() {
+          isInterested = interestResponseBody['bool'] == true;
+        });
+      } else {
+        throw Exception('Failed to check interest status');
+      }
+    } catch (e) {
+      print('Error checking interest status: $e');
+    }
   }
 
+  // 檢查是否有按讚或不喜歡
+  Future<void> _checkLikeDislikeStatus() async {
+    try {
+      final likeResponse = await http.get(
+        Uri.parse('http://192.168.112.134:8000/api/like/${userid_detail}/${widget.data.userId}/'),
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+      );
+
+      if (likeResponse.statusCode == 200) {
+        final likeResponseBody = jsonDecode(likeResponse.body);
+
+        setState(() {
+          userRating = likeResponseBody['like_or_dislike'] == true
+              ? true
+              : likeResponseBody['like_or_dislike'] == false
+                  ? false
+                  : null;
+        });
+      } else {
+        throw Exception('Failed to check like status');
+      }
+    } catch (e) {
+      print('Error checking like status: $e');
+    }
+  }
   void updateInterestedCount(bool isInterested) {
     setState(() {
       interestedCount += isInterested ? 1 : -1;
@@ -140,23 +197,70 @@ class _DetailPageState extends State<DetailPage> {
       });
     }
   }
+  Future<void> _checkClaimStatus() async {
+    try {
+      final checkResponse = await http.get(
+        Uri.parse('http://192.168.112.134:8000/api/take/${userid_detail}/${widget.data.postId}/'),
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+      );
 
+      if (checkResponse.statusCode == 200) {
+        final checkResponseBody = jsonDecode(checkResponse.body);
+
+        // 如果返回 true，表示已經領取過
+        if (checkResponseBody['bool'] == true) {
+          setState(() {
+            hasClaimed = true;
+          });
+        }
+      } else {
+        throw Exception('Failed to check claim status');
+      }
+    } catch (e) {
+      print('Error checking claim status: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('檢查領取狀態失敗: $e')),
+      );
+    }
+  }
   Future<void> _handleClaim() async {
     int quantity = int.parse(selectedQuantity.split(' ')[1][0]);
+    print('領取數量: $quantity');
+    print('剩餘數量: $remainingQuantity');
     if (quantity <= remainingQuantity) {
-      setState(() {
-        remainingQuantity -= quantity;
-      });
-
-      
       try {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('成功領取 $quantity 份')),
+        final postResponse = await http.post(
+          Uri.parse('http://192.168.112.134:8000/api/take/'),
+          headers: <String, String>{
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: jsonEncode(<String, dynamic>{
+            'user_id': userid_detail,
+            'post_id': widget.data.postId,
+            'quantity': quantity.toString(),
+          }),
         );
+
+        if (postResponse.statusCode == 200) {
+          final postResponseBody = jsonDecode(postResponse.body);
+
+          // 更新剩餘數量並顯示成功訊息
+          setState(() {
+            remainingQuantity -= quantity;
+            hasClaimed = true; // 設定已領取
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('成功領取 $quantity 份')),
+          );
+        } else {
+          throw Exception('Failed to claim');
+        }
       } catch (e) {
         print('Error: $e');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('領取失敗')),
+          SnackBar(content: Text('領取失敗: $e')),
         );
       }
     } else {
@@ -184,6 +288,7 @@ class _DetailPageState extends State<DetailPage> {
             ),
             LocationInfo(
               data: widget.data,
+              remainingQuantity: remainingQuantity,
             ),
             SizedBox(height: 16),
             Row(
@@ -201,7 +306,7 @@ class _DetailPageState extends State<DetailPage> {
                           child: Text(value),
                         );
                       }).toList(),
-                      onChanged: updateSelectedQuantity,
+                      onChanged: hasClaimed ? null : updateSelectedQuantity,
                     ),
                   ),
                 ),
@@ -210,12 +315,12 @@ class _DetailPageState extends State<DetailPage> {
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
                     child: ElevatedButton(
-                      child: Text('我已領取'),
+                      child: Text(hasClaimed ? '已領取' : '我要領取'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFF98D6E8),
+                        backgroundColor: hasClaimed ? Colors.grey : Color(0xFF98D6E8),
                         foregroundColor: Colors.black87,
                       ),
-                      onPressed: _handleClaim,
+                      onPressed: hasClaimed ? null : _handleClaim,
                     ),
                   ),
                 ),
@@ -270,18 +375,32 @@ class _ImageCarouselState extends State<ImageCarousel> {
               },
               itemBuilder: (context, index) {
                 // 解碼 base64 編碼的圖片數據
-                Uint8List imageData = base64Decode(widget.imageUrls[index]);
+                
+                try {
+                  // 如果 Base64 字符串有前綴 "data:image/png;base64,", 切割後使用編碼部分
+                  String base64String = widget.imageUrls[index].contains(',')
+                      ? widget.imageUrls[index].split(',').last
+                      : widget.imageUrls[index];
 
-                return Image.memory(
-                  imageData,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey[200],
-                      child: Icon(Icons.error, color: Colors.red),
-                    );
-                  },
-                );
+                  Uint8List imageData = base64Decode(base64String);
+
+                  return Image.memory(
+                    imageData,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey[200],
+                        child: Icon(Icons.error, color: Colors.red),
+                      );
+                    },
+                  );
+                } catch (e) {
+                  print('Error decoding Base64 image: $e');
+                  return Container(
+                    color: Colors.grey[200],
+                    child: Icon(Icons.error, color: Colors.red),
+                  );
+                }
               },
             ),
             Positioned(
@@ -314,17 +433,18 @@ class _ImageCarouselState extends State<ImageCarousel> {
 }
 
 class ProviderInfo extends StatefulWidget {
-  final Function(bool) onInterestChanged;
+  final dynamic data;
   final List<String> tags;
   final bool useHorizontalScroll;
-  final InfoCardData data;
+  final Function(bool) onInterestChanged;
 
-  ProviderInfo({
-    required this.onInterestChanged,
+  const ProviderInfo({
+    Key? key,
+    required this.data,
     required this.tags,
     this.useHorizontalScroll = false,
-    required this.data,
-  });
+    required this.onInterestChanged,
+  }) : super(key: key);
 
   @override
   _ProviderInfoState createState() => _ProviderInfoState();
@@ -333,15 +453,110 @@ class ProviderInfo extends StatefulWidget {
 class _ProviderInfoState extends State<ProviderInfo> {
   
   bool isInterested = false;
+  bool? userRating;
   int likes = 0;
   int dislikes = 0;
-  bool? userRating;
 
   final List<Color> tagColors = [
     const Color.fromARGB(255, 202, 209, 213),
   ];
 
-  void _handleRating(bool isLike) {
+  Future<void> _handleLikeDislike(bool isLike) async {
+    // 保存原始狀態，以便在需要時恢復
+    final originalUserRating = userRating;
+    final originalLikes = likes;
+    final originalDislikes = dislikes;
+
+    // 更新 UI
+    setState(() {
+      if (userRating == isLike) {
+        // 取消當前選擇
+        userRating = null;
+        isLike ? likes-- : dislikes--;
+      } else {
+        // 切換選擇
+        if (userRating != null) {
+          userRating! ? likes-- : dislikes--;
+        }
+        userRating = isLike;
+        isLike ? likes++ : dislikes++;
+      }
+    });
+
+    // 調用 API
+    final url = Uri.parse('http://192.168.112.134:8000/api/like/');
+    try {
+      final response = await http.post(
+        url,
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonEncode(<String, dynamic>{
+          'liker_id': userid_detail,
+          'receiver_id': widget.data.userId,
+          'like_or_dislike': isLike ? "0" : "1",
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('API調用失敗：${response.statusCode}');
+      }
+    } catch (e) {
+      // 錯誤處理
+      print('發生異常：$e');
+      // 恢復原始狀態
+      setState(() {
+        userRating = originalUserRating;
+        likes = originalLikes;
+        dislikes = originalDislikes;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('操作失敗，請稍後再試')),
+      );
+    }
+  }
+
+  Future<void> _handleInteraction(bool? isLike) async {
+    if (isLike == null) {
+      await _handleInterest();
+    } else {
+      await _handleLike(isLike);
+    }
+  }
+  Future<void> _handleInterest() async {
+    final url = Uri.parse('http://192.168.112.134:8000/api/interest/');
+    final response = await http.post(
+      url,
+      headers: <String, String>{
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: jsonEncode(<String, dynamic>{
+        'user_id': userid_detail,
+        'post_id': widget.data.postId,
+        'longitude': widget.data.location,
+        'latitude': widget.data.location,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      setState(() {
+        isInterested = !isInterested;
+        widget.onInterestChanged(isInterested);
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('無法更新興趣狀態，請稍後再試')),
+      );
+    }
+  }
+
+  Future<void> _handleLike(bool isLike) async {
+    // 保存原始狀態，以便在發生錯誤時恢復
+    final originalUserRating = userRating;
+    final originalLikes = likes;
+    final originalDislikes = dislikes;
+
+    // 立即更新 UI 以提供即時反饋
     setState(() {
       if (userRating == isLike) {
         userRating = null;
@@ -354,7 +569,65 @@ class _ProviderInfoState extends State<ProviderInfo> {
         isLike ? likes++ : dislikes++;
       }
     });
+
+    final url = Uri.parse('http://192.168.112.134:8000/api/like/');
+    try {
+      print('Sending request to: $url');
+      print('Request body: ${jsonEncode(<String, dynamic>{
+        'liker_id': userid_detail,
+        'receiver_id': widget.data.userId,
+        'like_or_dislike': isLike,
+      })}');
+
+      final response = await http.post(
+        url,
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonEncode(<String, dynamic>{
+          'liker_id': userid_detail,
+          'receiver_id': widget.data.userId,
+          'like_or_dislike': isLike,
+        }),
+      );
+
+      print('API Response Status Code: ${response.statusCode}');
+      print('API Response Body: ${response.body}');
+
+      if (response.statusCode != 200) {
+        throw Exception('API調用失敗：${widget.data.userId}');
+      }
+    } catch (e) {
+      print('發生異常：$e');
+      // 恢復原始狀態
+      setState(() {
+        userRating = originalUserRating;
+        likes = originalLikes;
+        dislikes = originalDislikes;
+      });
+
+      String errorMessage;
+      if (e.toString().contains('SocketException')) {
+        errorMessage = '網絡連接錯誤，請檢查您的網絡連接';
+      } else if (e.toString().contains('500')) {
+        errorMessage = '服務器內部錯誤，請稍後再試';
+      } else {
+        errorMessage = '操作失敗，請稍後再試';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          duration: Duration(seconds: 5),
+          action: SnackBarAction(
+            label: '重試',
+            onPressed: () => _handleLike(isLike),
+          ),
+        ),
+      );
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -397,7 +670,7 @@ class _ProviderInfoState extends State<ProviderInfo> {
             int idx = entry.key;
             String tag = entry.value;
             return Chip(
-              label: Text(tag),
+              label: Text(utf8.decode(tag.codeUnits)),
               backgroundColor: tagColors[idx % tagColors.length],
               labelStyle: TextStyle(fontSize: 12, color: const Color.fromARGB(255, 255, 255, 255)),
               padding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
@@ -412,12 +685,7 @@ class _ProviderInfoState extends State<ProviderInfo> {
     return Row(
       children: [
         InkWell(
-          onTap: () {
-            setState(() {
-              isInterested = !isInterested;
-            });
-            widget.onInterestChanged(isInterested);
-          },
+          onTap: () => _handleInteraction(null),
           child: Row(
             children: [
               Icon(
@@ -453,7 +721,7 @@ class _ProviderInfoState extends State<ProviderInfo> {
       children: [
         IconButton(
           icon: Icon(icon, color: isSelected ? color : Colors.grey),
-          onPressed: () => _handleRating(isLike),
+          onPressed: () => _handleInteraction(isLike),
         ),
         Text(
           '$count',
@@ -470,7 +738,8 @@ class _ProviderInfoState extends State<ProviderInfo> {
 class LocationInfo extends StatelessWidget {
 
   final InfoCardData data;
-  LocationInfo({required this.data});
+  final int remainingQuantity;
+  LocationInfo({required this.data, required this.remainingQuantity});
   
 
   @override
@@ -484,7 +753,7 @@ class LocationInfo extends StatelessWidget {
           _buildRow('感興趣人數: ', Text(data.numInterests.toString())),
           _buildRow('上架時間:', Text(DateFormat('yyyy-MM-dd HH:mm').format(DateTime.parse(data.postTime)).toString())),
           _buildRow('結束時間:', Text(DateFormat('yyyy-MM-dd HH:mm').format(DateTime.parse(data.finishTime)).toString())),
-          _buildRow('剩餘數量:',  Text((data.foodNum - data.takedQuantity).toString())),
+          _buildRow('剩餘數量:',  Text(remainingQuantity.toString())),
           _buildRow('其他說明:',  Text(utf8.decode(data.food_description.codeUnits))),
         ],
       ),

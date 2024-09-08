@@ -75,6 +75,10 @@ class ChoosePage extends StatelessWidget {
 
             // 第三個區塊
             Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pushNamed(context, '/analysis');
+                },
               child: Container(
                 decoration: BoxDecoration(
                   color: Color(0xFFECEFF1), // 背景顏色
@@ -99,7 +103,7 @@ class ChoosePage extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
+            )),
           ],
         ),
       ),
