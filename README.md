@@ -1,16 +1,8 @@
 # hackthon31
 
-A new Flutter project.
+使用說明
+- cd/db/foodDB/python manage.py runserver 192.168.112.134:8000
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- 另開一個terminal
+  - flutter pub get
+  - flutter run 
